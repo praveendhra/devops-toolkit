@@ -1,0 +1,55 @@
+name: Deploy to Azure Web App
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_WEBAPP_NAME: myapp-prod
+  ACR_LOGIN_SERVER: myacr.azurecr.io
+  IMAGE_NAME: myapp
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: az acr login --name myacr
+
+      - name: Build and push
+        run: |
+          docker build -t $ACR_LOGIN_SERVER/$IMAGE_NAME:${{ github.sha }} .
+          docker push $ACR_LOGIN_SERVER/$IMAGE_NAME:${{ github.sha }}
+
+      - name: Deploy to staging slot
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          slot-name: staging
+          images: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Smoke test staging
+        run: |
+          sleep 30
+          curl -f https://myapp-prod-staging.azurewebsites.net/health
+
+      - name: Swap staging to production
+        run: |
+          az webapp deployment slot swap \
+            -g myapp-rg \
+            -n ${{ env.AZURE_WEBAPP_NAME }} \
+            --slot staging --target-slot production
