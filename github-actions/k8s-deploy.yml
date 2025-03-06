@@ -1,0 +1,43 @@
+name: Deploy to Kubernetes
+
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'Dockerfile', 'kubernetes/**']
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
+          echo "KUBECONFIG=$(pwd)/kubeconfig" >> $GITHUB_ENV
+
+      - name: Build and push image
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}:${{ github.sha }} .
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+      - name: Update image tag
+        run: |
+          cd kubernetes/base
+          kustomize edit set image app=ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+      - name: Deploy with kustomize
+        run: kubectl apply -k kubernetes/overlays/production/
+
+      - name: Wait for rollout
+        run: kubectl rollout status deployment/app -n app --timeout=300s
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n app
+          kubectl get svc -n app
