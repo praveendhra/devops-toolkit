@@ -1,0 +1,112 @@
+# Azure DevOps CI/CD Pipeline
+# Build, test, and deploy to Azure App Service
+
+trigger:
+  branches:
+    include: [main, develop]
+  paths:
+    exclude: ['docs/*', '*.md']
+
+pr:
+  branches:
+    include: [main]
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: app-settings
+  - name: imageName
+    value: 'myapp'
+  - name: azureSubscription
+    value: 'production-connection'
+
+stages:
+  - stage: Build
+    displayName: 'Build & Test'
+    jobs:
+      - job: BuildJob
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.12'
+
+          - script: |
+              pip install -r requirements.txt
+              pip install -r requirements-dev.txt
+            displayName: 'Install dependencies'
+
+          - script: |
+              pytest tests/ -v --junitxml=test-results.xml --cov=src --cov-report=xml
+            displayName: 'Run tests'
+
+          - task: PublishTestResults@2
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'test-results.xml'
+            condition: always()
+
+          - task: PublishCodeCoverageResults@2
+            inputs:
+              summaryFileLocation: 'coverage.xml'
+
+          - task: Docker@2
+            displayName: 'Build Docker image'
+            inputs:
+              command: build
+              Dockerfile: Dockerfile
+              tags: |
+                $(Build.BuildId)
+                latest
+
+          - task: Docker@2
+            displayName: 'Push to ACR'
+            inputs:
+              command: push
+              containerRegistry: 'acr-connection'
+              repository: $(imageName)
+              tags: |
+                $(Build.BuildId)
+                latest
+
+  - stage: DeployStaging
+    displayName: 'Deploy to Staging'
+    dependsOn: Build
+    condition: eq(variables['Build.SourceBranch'], 'refs/heads/develop')
+    jobs:
+      - deployment: DeployStaging
+        environment: 'staging'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebAppContainer@1
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    appName: 'myapp-staging'
+                    containers: 'myacr.azurecr.io/$(imageName):$(Build.BuildId)'
+
+  - stage: DeployProduction
+    displayName: 'Deploy to Production'
+    dependsOn: Build
+    condition: eq(variables['Build.SourceBranch'], 'refs/heads/main')
+    jobs:
+      - deployment: DeployProd
+        environment: 'production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebAppContainer@1
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    appName: 'myapp-prod'
+                    containers: 'myacr.azurecr.io/$(imageName):$(Build.BuildId)'
+                    deployToSlotOrASE: true
+                    slotName: 'staging'
+                - task: AzureAppServiceManage@0
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    Action: 'Swap Slots'
+                    WebAppName: 'myapp-prod'
+                    SourceSlot: 'staging'
