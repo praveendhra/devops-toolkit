@@ -1,0 +1,53 @@
+# Reusable build template for Azure Pipelines
+# Usage:
+#   - template: template-build.yml
+#     parameters:
+#       pythonVersion: '3.12'
+#       projectPath: 'src/'
+
+parameters:
+  - name: pythonVersion
+    type: string
+    default: '3.12'
+  - name: projectPath
+    type: string
+    default: '.'
+  - name: runTests
+    type: boolean
+    default: true
+  - name: publishArtifact
+    type: boolean
+    default: true
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: ${{ parameters.pythonVersion }}
+    displayName: 'Use Python ${{ parameters.pythonVersion }}'
+
+  - script: |
+      cd ${{ parameters.projectPath }}
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+    displayName: 'Install dependencies'
+
+  - ${{ if parameters.runTests }}:
+    - script: |
+        cd ${{ parameters.projectPath }}
+        pip install -r requirements-dev.txt
+        pytest tests/ -v --junitxml=test-results.xml
+      displayName: 'Run tests'
+
+    - task: PublishTestResults@2
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '**/test-results.xml'
+      condition: always()
+      displayName: 'Publish test results'
+
+  - ${{ if parameters.publishArtifact }}:
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: ${{ parameters.projectPath }}
+        artifactName: 'app'
+      displayName: 'Publish artifact'
