@@ -1,0 +1,40 @@
+parameters:
+  - name: dockerfilePath
+    type: string
+    default: 'Dockerfile'
+  - name: imageName
+    type: string
+  - name: acrServiceConnection
+    type: string
+  - name: buildContext
+    type: string
+    default: '.'
+
+steps:
+  - task: Docker@2
+    displayName: 'Build image'
+    inputs:
+      command: build
+      Dockerfile: ${{ parameters.dockerfilePath }}
+      buildContext: ${{ parameters.buildContext }}
+      tags: |
+        $(Build.BuildId)
+        latest
+      arguments: '--build-arg BUILD_NUMBER=$(Build.BuildId)'
+
+  - task: Docker@2
+    displayName: 'Push to ACR'
+    inputs:
+      command: push
+      containerRegistry: ${{ parameters.acrServiceConnection }}
+      repository: ${{ parameters.imageName }}
+      tags: |
+        $(Build.BuildId)
+        latest
+
+  - task: AquaSecTrivy@1
+    displayName: 'Scan image for vulnerabilities'
+    inputs:
+      image: '${{ parameters.imageName }}:$(Build.BuildId)'
+      severities: 'CRITICAL,HIGH'
+      exitCode: 1
