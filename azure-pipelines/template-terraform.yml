@@ -1,0 +1,69 @@
+parameters:
+  - name: workingDirectory
+    type: string
+  - name: environment
+    type: string
+  - name: azureSubscription
+    type: string
+  - name: backendResourceGroup
+    type: string
+    default: 'tfstate-rg'
+  - name: backendStorageAccount
+    type: string
+    default: 'tfstatesa'
+
+stages:
+  - stage: Plan_${{ parameters.environment }}
+    displayName: 'Terraform Plan (${{ parameters.environment }})'
+    jobs:
+      - job: Plan
+        steps:
+          - task: TerraformInstaller@1
+            inputs:
+              terraformVersion: 'latest'
+
+          - task: TerraformTaskV4@4
+            displayName: 'Init'
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: ${{ parameters.workingDirectory }}
+              backendServiceArm: ${{ parameters.azureSubscription }}
+              backendAzureRmResourceGroupName: ${{ parameters.backendResourceGroup }}
+              backendAzureRmStorageAccountName: ${{ parameters.backendStorageAccount }}
+              backendAzureRmContainerName: 'tfstate'
+              backendAzureRmKey: '${{ parameters.environment }}.tfstate'
+
+          - task: TerraformTaskV4@4
+            displayName: 'Plan'
+            inputs:
+              provider: 'azurerm'
+              command: 'plan'
+              workingDirectory: ${{ parameters.workingDirectory }}
+              environmentServiceNameAzureRM: ${{ parameters.azureSubscription }}
+              commandOptions: '-var-file=${{ parameters.environment }}.tfvars -out=tfplan'
+
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: '${{ parameters.workingDirectory }}/tfplan'
+              artifactName: 'tfplan-${{ parameters.environment }}'
+
+  - stage: Apply_${{ parameters.environment }}
+    displayName: 'Terraform Apply (${{ parameters.environment }})'
+    dependsOn: Plan_${{ parameters.environment }}
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: Apply
+        environment: ${{ parameters.environment }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: TerraformTaskV4@4
+                  displayName: 'Apply'
+                  inputs:
+                    provider: 'azurerm'
+                    command: 'apply'
+                    workingDirectory: ${{ parameters.workingDirectory }}
+                    environmentServiceNameAzureRM: ${{ parameters.azureSubscription }}
+                    commandOptions: 'tfplan'
