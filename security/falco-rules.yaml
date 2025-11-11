@@ -1,0 +1,35 @@
+- rule: Terminal shell in container
+  desc: Detect shell opened in a container
+  condition: >
+    spawned_process and container
+    and shell_procs
+    and proc.tty != 0
+    and container_entrypoint
+  output: >
+    Shell opened in container
+    (user=%user.name container=%container.name shell=%proc.name
+     parent=%proc.pname cmdline=%proc.cmdline image=%container.image.repository)
+  priority: WARNING
+  tags: [container, shell, mitre_execution]
+
+- rule: Read sensitive file in container
+  desc: Detect reading of sensitive files in containers
+  condition: >
+    open_read and container
+    and sensitive_files
+    and not proc.name in (allowed_sensitive_readers)
+  output: >
+    Sensitive file opened in container
+    (file=%fd.name container=%container.name image=%container.image.repository)
+  priority: WARNING
+
+- rule: Unexpected network connection
+  desc: Detect unexpected outbound connections
+  condition: >
+    outbound and container
+    and not fd.sport in (allowed_outbound_ports)
+    and not k8s.ns.name in (kube-system)
+  output: >
+    Unexpected outbound connection
+    (command=%proc.cmdline connection=%fd.name container=%container.name)
+  priority: NOTICE
