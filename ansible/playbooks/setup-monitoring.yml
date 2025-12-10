@@ -1,0 +1,79 @@
+---
+- name: Setup monitoring stack on Ubuntu servers
+  hosts: monitoring
+  become: true
+  vars:
+    prometheus_version: "2.50.0"
+    node_exporter_version: "1.7.0"
+
+  tasks:
+    - name: Create prometheus user
+      user:
+        name: prometheus
+        system: true
+        shell: /usr/sbin/nologin
+
+    - name: Download Prometheus
+      get_url:
+        url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+        dest: /tmp/prometheus.tar.gz
+
+    - name: Extract Prometheus
+      unarchive:
+        src: /tmp/prometheus.tar.gz
+        dest: /opt/
+        remote_src: true
+
+    - name: Create Prometheus systemd service
+      copy:
+        dest: /etc/systemd/system/prometheus.service
+        content: |
+          [Unit]
+          Description=Prometheus
+          After=network.target
+
+          [Service]
+          User=prometheus
+          ExecStart=/opt/prometheus/prometheus \
+            --config.file=/etc/prometheus/prometheus.yml \
+            --storage.tsdb.path=/var/lib/prometheus \
+            --storage.tsdb.retention.time=30d
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Start Prometheus
+      systemd:
+        name: prometheus
+        state: started
+        enabled: true
+        daemon_reload: true
+
+    - name: Download Node Exporter
+      get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+        dest: /tmp/node_exporter.tar.gz
+
+    - name: Install and start Node Exporter
+      block:
+        - unarchive:
+            src: /tmp/node_exporter.tar.gz
+            dest: /opt/
+            remote_src: true
+        - copy:
+            dest: /etc/systemd/system/node-exporter.service
+            content: |
+              [Unit]
+              Description=Node Exporter
+              [Service]
+              User=prometheus
+              ExecStart=/opt/node_exporter/node_exporter
+              Restart=always
+              [Install]
+              WantedBy=multi-user.target
+        - systemd:
+            name: node-exporter
+            state: started
+            enabled: true
+            daemon_reload: true
