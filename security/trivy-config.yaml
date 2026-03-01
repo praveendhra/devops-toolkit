@@ -1,0 +1,40 @@
+# Trivy security scanner configuration
+# Used in CI/CD pipelines for container and filesystem scanning
+
+severity:
+  - CRITICAL
+  - HIGH
+
+# Ignore unfixed vulnerabilities
+ignore-unfixed: true
+
+# Skip specific vulnerability IDs
+ignorefile: .trivyignore
+
+# Output format
+format: table
+
+# Exit code on findings
+exit-code: 1
+
+# Scan options
+scan:
+  # File system scanning
+  filesystem:
+    skip-dirs:
+      - node_modules
+      - .git
+      - vendor
+    skip-files:
+      - "*.test.js"
+      - "*.spec.py"
+
+  # Container scanning
+  image:
+    removed-pkgs: true
+    input: ""
+
+# Database
+db:
+  skip-update: false
+  light: false
