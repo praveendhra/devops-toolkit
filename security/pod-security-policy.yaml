@@ -1,0 +1,48 @@
+# Pod Security Standards - Restricted profile
+# Apply to production namespaces for security hardening
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
+---
+# OPA Gatekeeper constraint template - require resource limits
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredresources
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredResources
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredresources
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          not container.resources.limits.cpu
+          msg := sprintf("Container '%v' must have CPU limits", [container.name])
+        }
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          not container.resources.limits.memory
+          msg := sprintf("Container '%v' must have memory limits", [container.name])
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredResources
+metadata:
+  name: require-resource-limits
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces: ["production"]
