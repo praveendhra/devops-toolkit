@@ -1,0 +1,129 @@
+name: DevOps Toolkit — Cherry Pick
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  cherry-pick:
+    # Only run on PR comments that start with /cherry-pick
+    if: >
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/cherry-pick')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Run cherry-pick
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.comment.body;
+            const match = body.match(/^\/cherry-pick\s+(\S+)/);
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prNumber = context.issue.number;
+            const commentId = context.payload.comment.id;
+
+            // --- Helper: post a comment ---
+            async function comment(msg) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: prNumber, body: msg,
+              });
+            }
+
+            // --- Validate args ---
+            if (!match) {
+              await comment('❌ Usage: `/cherry-pick <target-branch>`');
+              return;
+            }
+
+            const targetBranch = match[1];
+
+            if (!/^[\w.\-\/]+$/.test(targetBranch)) {
+              await comment('❌ Invalid branch name. Use only alphanumeric chars, hyphens, dots, underscores, and forward slashes.');
+              return;
+            }
+
+            // --- Acknowledge ---
+            await github.rest.reactions.createForIssueComment({
+              owner, repo, comment_id: commentId, content: 'eyes',
+            });
+
+            // --- Get PR details ---
+            const { data: pr } = await github.rest.pulls.get({
+              owner, repo, pull_number: prNumber,
+            });
+
+            if (!pr.merged || !pr.merge_commit_sha) {
+              await comment('❌ This PR has not been merged yet. Cherry-pick is only available for merged PRs.');
+              return;
+            }
+
+            // --- Verify target branch exists ---
+            let targetSha;
+            try {
+              const { data: ref } = await github.rest.git.getRef({
+                owner, repo, ref: `heads/${targetBranch}`,
+              });
+              targetSha = ref.object.sha;
+            } catch (e) {
+              await comment(`❌ Target branch \`${targetBranch}\` not found.`);
+              return;
+            }
+
+            // --- Create cherry-pick branch ---
+            const cpBranch = `cherry-pick/pr-${prNumber}-to-${targetBranch}`;
+
+            try {
+              await github.rest.git.createRef({
+                owner, repo, ref: `refs/heads/${cpBranch}`, sha: targetSha,
+              });
+            } catch (e) {
+              if (e.status === 422) {
+                await comment(`❌ Branch \`${cpBranch}\` already exists. Delete it first and try again.`);
+                return;
+              }
+              throw e;
+            }
+
+            // --- Merge the PR's merge commit into the cherry-pick branch ---
+            try {
+              await github.request('POST /repos/{owner}/{repo}/merges', {
+                owner, repo,
+                base: cpBranch,
+                head: pr.merge_commit_sha,
+                commit_message: `Cherry-pick: ${pr.title} (#${prNumber})`,
+              });
+            } catch (e) {
+              if (e.status === 409) {
+                await comment(
+                  `⚠️ Cherry-pick to \`${targetBranch}\` resulted in merge conflicts.\n\n` +
+                  `The branch \`${cpBranch}\` has been created from \`${targetBranch}\`. ` +
+                  `Resolve conflicts manually:\n\n` +
+                  '```bash\n' +
+                  `git fetch origin\n` +
+                  `git checkout ${cpBranch}\n` +
+                  `git cherry-pick ${pr.merge_commit_sha}\n` +
+                  `# Resolve conflicts, then:\n` +
+                  `git push origin ${cpBranch}\n` +
+                  '```'
+                );
+                return;
+              }
+              throw e;
+            }
+
+            // --- Post success with PR link ---
+            const compareUrl =
+              `https://github.com/${owner}/${repo}/compare/${targetBranch}...${cpBranch}` +
+              `?expand=1` +
+              `&title=${encodeURIComponent(`[Cherry-pick] ${pr.title}`)}` +
+              `&body=${encodeURIComponent(`Cherry-pick of #${prNumber} to \`${targetBranch}\``)}`;
+
+            await comment(
+              `✅ Cherry-pick branch \`${cpBranch}\` created successfully!\n\n` +
+              `[🔗 Create Cherry-Pick PR to \`${targetBranch}\`](${compareUrl})`
+            );

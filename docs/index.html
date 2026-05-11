@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DevOps Toolkit — GitHub App</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container { max-width: 720px; margin: 0 auto; padding: 2rem 1.5rem; }
+    header { text-align: center; padding: 3rem 0 2rem; }
+    header h1 { font-size: 2.4rem; margin-bottom: 0.5rem; }
+    header p { color: var(--muted); font-size: 1.15rem; }
+    .install-btn {
+      display: inline-block;
+      margin-top: 1.5rem;
+      padding: 0.75rem 2rem;
+      background: var(--green);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 6px;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+    .install-btn:hover { opacity: 0.9; }
+    section { margin-top: 2.5rem; }
+    section h2 {
+      font-size: 1.3rem;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .command {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .command h3 { color: var(--accent); font-family: monospace; font-size: 1.1rem; }
+    .command p { color: var(--muted); margin-top: 0.4rem; font-size: 0.95rem; }
+    .steps { list-style: none; counter-reset: step; }
+    .steps li {
+      counter-increment: step;
+      padding: 0.5rem 0 0.5rem 2.2rem;
+      position: relative;
+      color: var(--muted);
+    }
+    .steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      width: 1.6rem;
+      height: 1.6rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      text-align: center;
+      line-height: 1.6rem;
+      font-size: 0.8rem;
+      color: var(--accent);
+    }
+    code {
+      background: var(--surface);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    footer {
+      margin-top: 3rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+      padding-bottom: 2rem;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🛠 DevOps Toolkit</h1>
+      <p>A modular GitHub App for DevOps automation</p>
+      <!-- TODO: Replace YOUR_APP_NAME with your actual GitHub App slug -->
+      <a class="install-btn" href="https://github.com/apps/YOUR_APP_NAME/installations/new">
+        Install on GitHub
+      </a>
+    </header>
+
+    <section>
+      <h2>Commands</h2>
+      <div class="command">
+        <h3>/cherry-pick &lt;target-branch&gt;</h3>
+        <p>
+          Comment on a merged pull request to cherry-pick its changes onto another branch.
+          Creates a cherry-pick branch and provides a link to open a PR.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2>How it works</h2>
+      <ol class="steps">
+        <li>Install the app on your repository</li>
+        <li>Merge a pull request</li>
+        <li>Comment <code>/cherry-pick release-1.0</code> on the merged PR</li>
+        <li>The bot creates a cherry-pick branch and posts a PR creation link</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Permissions required</h2>
+      <ol class="steps">
+        <li><strong>Contents</strong> — Read &amp; Write (create branches, merge)</li>
+        <li><strong>Pull requests</strong> — Read &amp; Write (read PR details)</li>
+        <li><strong>Issues</strong> — Read &amp; Write (post comments)</li>
+      </ol>
+    </section>
+
+    <footer>
+      <a href="https://github.com/praveendhra/devops-toolkit">View source on GitHub</a>
+    </footer>
+  </div>
+</body>
+</html>
